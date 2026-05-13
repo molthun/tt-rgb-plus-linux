@@ -1,0 +1,13 @@
+[Unit]
+Description=Thermaltake TT RGB Plus automatic fan control
+After=multi-user.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tt-rgb-plus
+ExecStart=/usr/bin/python3 /opt/tt-rgb-plus/tt_rgb_plus.py auto --source max --all-controllers --ports 1 2 3 4 5 --curve 0:25,30:35,50:55,70:75,90:100
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

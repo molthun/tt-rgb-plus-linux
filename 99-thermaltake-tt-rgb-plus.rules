@@ -1,0 +1,4 @@
+# Allow regular users in the plugdev group to access Thermaltake TT RGB Plus
+# USB HID fan controllers.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="264a", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="264a", MODE="0660", GROUP="plugdev", TAG+="uaccess"

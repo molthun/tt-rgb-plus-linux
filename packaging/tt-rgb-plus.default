@@ -1,0 +1,8 @@
+# Options used by tt-rgb-plus-auto.service.
+#
+# For the tested SWAFAN EX14 AI-server setup:
+# - use CPU Tctl, NVIDIA GPU, NVMe, and IT87952 motherboard/case sensors
+# - apply to all detected Thermaltake controllers and ports 1-5
+# - sync circular RGB with calculated fan speed
+
+TT_RGB_PLUS_ARGS="auto-temp --sensors Tctl nvidia nvme it87952 --all-controllers --ports 1 2 3 4 5 --interval 2 --step 2 --curve 30:18,40:24,50:38,60:58,70:80,80:100 --rgb-sync --rgb-style spectrum"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Thermaltake TT RGB Plus automatic fan and RGB control
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/tt-rgb-plus
+ExecStart=/usr/bin/tt-rgb-plus $TT_RGB_PLUS_ARGS
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

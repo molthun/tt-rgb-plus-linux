@@ -198,7 +198,8 @@ Default color-by-speed mapping:
 - high speed: orange/red
 
 For SWAFAN EX chains, color sync sends a 60-LED payload by default, enough for
-up to 3 fans on one port.
+up to 3 fans on one port. Color sync is refreshed regularly with
+`--rgb-refresh` to prevent controllers from falling back to a previous effect.
 
 Legacy commands are still available:
 

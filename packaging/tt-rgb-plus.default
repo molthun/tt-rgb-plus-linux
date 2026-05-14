@@ -1,6 +1,6 @@
 # Options used by tt-rgb-plus-auto.service.
 #
-# For the tested SWAFAN EX14 AI-server setup:
+# Example multi-sensor setup:
 # - use CPU Tctl, NVIDIA GPU, NVMe, and IT87952 motherboard/case sensors
 # - apply to all detected Thermaltake controllers and ports 1-5
 # - sync circular RGB with calculated fan speed

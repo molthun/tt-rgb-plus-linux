@@ -157,7 +157,7 @@ tt-rgb-plus set-rgb-effect wave fast --color '#00aaff' --use-topology --all-cont
 - `--mode temp` for temperature-based control
 - `--mode load` for CPU/GPU load-based control
 
-Temperature mode for an AI server:
+Temperature mode with multiple sensors:
 
 ```bash
 tt-rgb-plus auto-control \
@@ -214,8 +214,8 @@ Show current service options:
 tt-rgb-plus config --show
 ```
 
-Change service options with one command. Temperature mode for the tested
-AI-server setup:
+Change service options with one command. Example temperature mode with multiple
+sensors:
 
 ```bash
 sudo tt-rgb-plus config \

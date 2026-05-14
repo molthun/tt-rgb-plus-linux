@@ -143,8 +143,8 @@ Temperature mode:
 - `--source max` uses the hottest available sensor.
 - `--sensor TEXT` can pin to a chip/label, such as `Tctl`, `Package`, `k10temp`,
   `coretemp`, or `nvidia`.
-- `--sensors A B C` selects the hottest sensor matching any listed text, useful
-  for AI servers, for example `--sensors Tctl nvidia nvme`.
+- `--sensors A B C` selects the hottest sensor matching any listed text, for
+  example `--sensors Tctl nvidia nvme`.
 - Applies temperature-to-speed curve such as `30:25,40:35,55:55,70:80,80:100`.
 - `auto-temp` writes current state to `/run/tt-rgb-plus/state.json`.
 - `monitor` reads this state and prints controller info, selected sensor,

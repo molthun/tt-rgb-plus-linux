@@ -57,6 +57,7 @@ RGB_EFFECTS = {
     "wave": {"base": 0x14, "uses_speed": True, "colors": "leds"},
     "per-led": {"base": 0x18, "uses_speed": False, "colors": "leds"},
 }
+LEDS_PER_SWAFAN_EX_FAN = 20
 
 
 @dataclass(frozen=True)
@@ -335,6 +336,23 @@ def parse_color_list(value: str) -> list[tuple[int, int, int]]:
     return [parse_color(item.strip()) for item in value.split(",") if item.strip()]
 
 
+def parse_port_fans(value: str) -> dict[int, int]:
+    mapping = {}
+    for item in value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        port_raw, fans_raw = item.split(":", 1)
+        port = int(port_raw)
+        fans = int(fans_raw)
+        if port < 1:
+            raise ValueError("Port number must be 1 or greater")
+        if fans < 1:
+            raise ValueError("Fan count must be 1 or greater")
+        mapping[port] = fans
+    return mapping
+
+
 def cmd_set_rgb(args: argparse.Namespace) -> None:
     try:
         red, green, blue = parse_color(args.color)
@@ -355,32 +373,47 @@ def cmd_set_rgb(args: argparse.Namespace) -> None:
                 print_reply(ctrl.save())
 
 
-def effect_colors(args: argparse.Namespace) -> list[tuple[int, int, int]]:
+def led_count_for_port(args: argparse.Namespace, port: int) -> int:
+    if args.port_fans:
+        try:
+            mapping = parse_port_fans(args.port_fans)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        return mapping.get(port, args.led_count) * LEDS_PER_SWAFAN_EX_FAN
+    return args.led_count
+
+
+def effect_colors(args: argparse.Namespace, port: int) -> list[tuple[int, int, int]]:
     color_mode = RGB_EFFECTS[args.effect]["colors"]
     if color_mode == "none":
         return []
+    led_count = led_count_for_port(args, port)
     if args.colors:
         colors = parse_color_list(args.colors)
         if color_mode == "single":
             return colors[:1]
         if len(colors) == 1:
-            return colors * args.led_count
-        if len(colors) != args.led_count:
-            raise SystemExit(f"--colors must contain either 1 color or exactly {args.led_count} colors")
+            return colors * led_count
+        if len(colors) != led_count:
+            raise SystemExit(f"--colors must contain either 1 color or exactly {led_count} colors for port {port}")
         return colors
     color = parse_color(args.color)
     if color_mode == "single":
         return [color]
-    return [color] * args.led_count
+    return [color] * led_count
 
 
 def cmd_set_rgb_effect(args: argparse.Namespace) -> None:
-    colors = effect_colors(args)
     for controller_index, info in enumerate(select_controllers(args.controller, args.all_controllers)):
         with TTController(info) as ctrl:
             ctrl.init()
             for port in args.ports:
-                print(f"setting controller {controller_index} port {port} rgb_effect={args.effect} speed={args.speed}")
+                colors = effect_colors(args, port)
+                led_count = len(colors) if RGB_EFFECTS[args.effect]["colors"] == "leds" else "-"
+                print(
+                    f"setting controller {controller_index} port {port} "
+                    f"rgb_effect={args.effect} speed={args.speed} led_count={led_count}"
+                )
                 print_reply(ctrl.set_rgb_effect(port, args.effect, args.speed, colors))
             if args.save:
                 print(f"saving profile on controller {controller_index}")
@@ -1052,6 +1085,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated colors for per-LED effects, for example '#ff0000,#00ff00,#0000ff'",
     )
     effect_parser.add_argument("--led-count", type=int, default=20, help="LED count for per-LED effects")
+    effect_parser.add_argument(
+        "--port-fans",
+        default=None,
+        help="Fan count by port for SWAFAN EX chains, for example: 1:3,2:3,3:3,4:1",
+    )
     effect_parser.add_argument("-c", "--controller", type=int, default=0, help="Controller index from list")
     effect_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     effect_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])

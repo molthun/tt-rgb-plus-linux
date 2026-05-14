@@ -118,6 +118,8 @@ RGB control:
   order by default.
 - Commands: `set-rgb COLOR` and `rgb-off`.
 - Built-in RGB effects: `set-rgb-effect flow|spectrum|ripple|blink|pulse|wave|per-led slow|normal|fast|extreme`.
+- `set-rgb-effect --port-fans 1:3,2:3,3:3,4:1` calculates LED payload length
+  per port for SWAFAN EX chains, using 20 LEDs per fan.
 - `auto-temp --rgb-sync --rgb-style color|flow|spectrum` syncs lighting with
   calculated fan speed. `color` changes static color from blue/cyan to red;
   `flow` and `spectrum` increase circular effect speed with fan speed.

@@ -101,6 +101,14 @@ tt-rgb-plus set-rgb-effect wave slow --color '#ffaa00' --led-count 20 --all-cont
 tt-rgb-plus set-rgb-effect blink normal --colors '#ff0000,#00ff00,#0000ff' --led-count 20 --all-controllers --ports 1
 ```
 
+For SWAFAN EX chains, use `--port-fans` instead of manually calculating LED
+counts. Each SWAFAN EX fan is treated as 20 LEDs. Example for one controller
+with three 3-fan chains and one single fan:
+
+```bash
+tt-rgb-plus set-rgb-effect wave slow --color '#ffaa00' --port-fans 1:3,2:3,3:3,4:1 --all-controllers --ports 1 2 3 4
+```
+
 Monitor state without taking over the HID controller:
 
 ```bash

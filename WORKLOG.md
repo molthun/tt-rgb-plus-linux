@@ -161,6 +161,8 @@ Unified control:
 - `topology` stores controller/port/fan counts in `/etc/tt-rgb-plus/topology.json`.
   RGB commands and `config --use-topology` can then target only occupied ports
   and calculate LED payload sizes automatically.
+- `topology wizard` interactively turns ports on one at a time and asks the
+  user how many fans lit up.
 
 ## Commands to run on Ubuntu
 

@@ -128,9 +128,13 @@ Save your physical layout once, then reuse it:
 
 ```bash
 tt-rgb-plus topology detect
+sudo tt-rgb-plus topology wizard
 sudo tt-rgb-plus topology set '1:3,2:3' '1:3,2:1'
 tt-rgb-plus topology show
 ```
+
+`topology wizard` turns all RGB off, lights one controller/port red at a time,
+asks how many fans lit up, and saves `/etc/tt-rgb-plus/topology.json`.
 
 The example means:
 

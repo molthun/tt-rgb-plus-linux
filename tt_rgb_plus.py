@@ -927,6 +927,78 @@ def cmd_topology(args: argparse.Namespace) -> None:
         print(json.dumps(data, indent=2, sort_keys=True))
         return
 
+    if args.topology_command == "wizard":
+        controllers = find_controllers()
+        if not controllers:
+            raise SystemExit("No supported Thermaltake controllers found")
+
+        print("This wizard will turn RGB off, then light one controller/port at a time.")
+        print("Enter the number of fans that lit up. Enter 0 for empty ports.")
+        print("Press Ctrl+C to stop without saving.")
+        input("Press Enter to start...")
+
+        data = {
+            "leds_per_fan": LEDS_PER_SWAFAN_EX_FAN,
+            "controllers": [],
+        }
+
+        try:
+            for idx, info in enumerate(controllers):
+                print(f"\nController {idx}: {info.family.name} {info.vendor_id:04x}:{info.product_id:04x}")
+                ports: dict[str, int] = {}
+                with TTController(info) as ctrl:
+                    ctrl.init()
+                    for port in args.ports:
+                        for off_port in args.ports:
+                            ctrl.set_rgb(off_port, 0, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
+                        ctrl.set_rgb(port, 255, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
+                        while True:
+                            answer = input(f"Controller {idx}, port {port}: how many fans are red? [0-{args.max_fans}] ").strip()
+                            try:
+                                fans = int(answer)
+                            except ValueError:
+                                print("Please enter a number.")
+                                continue
+                            if 0 <= fans <= args.max_fans:
+                                break
+                            print(f"Please enter a value from 0 to {args.max_fans}.")
+                        if fans > 0:
+                            ports[str(port)] = fans
+                    for off_port in args.ports:
+                        ctrl.set_rgb(off_port, 0, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
+
+                data["controllers"].append(
+                    {
+                        "index": idx,
+                        "vid_pid": f"{info.vendor_id:04x}:{info.product_id:04x}",
+                        "name": info.product_string or info.family.name,
+                        "serial": info.serial_number or "-",
+                        "fingerprint": controller_fingerprint(info),
+                        "ports": ports,
+                    }
+                )
+        except KeyboardInterrupt:
+            print("\nstopped; topology not saved")
+            return
+
+        print("\nDetected topology:")
+        print(json.dumps(data, indent=2, sort_keys=True))
+        if args.dry_run:
+            return
+        confirm = input(f"Save to {args.path}? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("not saved")
+            return
+        try:
+            os.makedirs(os.path.dirname(args.path), exist_ok=True)
+            with open(args.path, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+        except PermissionError as exc:
+            raise SystemExit(f"Permission denied writing {args.path}. Run with sudo.") from exc
+        print(f"written: {args.path}")
+        return
+
     controllers = find_controllers()
     data = {
         "leds_per_fan": LEDS_PER_SWAFAN_EX_FAN,
@@ -1195,6 +1267,12 @@ def build_parser() -> argparse.ArgumentParser:
     topology_detect = topology_sub.add_parser("detect", help="Print detected controllers as topology template")
     topology_detect.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     topology_detect.set_defaults(func=cmd_topology)
+    topology_wizard = topology_sub.add_parser("wizard", help="Interactively detect occupied ports and fan counts")
+    topology_wizard.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
+    topology_wizard.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5], help="Ports to check")
+    topology_wizard.add_argument("--max-fans", type=int, default=3, help="Maximum fans expected on one port")
+    topology_wizard.add_argument("--dry-run", action="store_true", help="Print topology without writing")
+    topology_wizard.set_defaults(func=cmd_topology)
     topology_set = topology_sub.add_parser("set", help="Save fan counts per controller")
     topology_set.add_argument(
         "controllers",

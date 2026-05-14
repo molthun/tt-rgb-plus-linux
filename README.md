@@ -85,6 +85,14 @@ tt-rgb-plus set-rgb '#00aaff' --all-controllers --ports 1 2 3 4 5
 tt-rgb-plus rgb-off --all-controllers --ports 1 2 3 4 5
 ```
 
+For SWAFAN EX chains, static color can also use `--port-fans` so the LED
+payload matches the number of fans per port:
+
+```bash
+tt-rgb-plus set-rgb red --port-fans 1:3,2:3,3:3,4:1 --all-controllers --ports 1 2 3 4
+tt-rgb-plus rgb-off --port-fans 1:3,2:3,3:3,4:1 --all-controllers --ports 1 2 3 4
+```
+
 Set a circular RGB effect:
 
 ```bash
@@ -293,6 +301,10 @@ sudo systemctl start tt-rgb-plus-auto.service
 
 Note which raw modes produce useful effects and open an issue with the mode
 number, controller PID, fan model, and visible behavior.
+
+Known SWAFAN EX LEDFanBox raw findings:
+
+- `0x24`: static color with per-LED payload, confirmed on `264a:232b/232c`
 
 ## Protocol Notes
 

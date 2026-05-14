@@ -116,8 +116,8 @@ RGB control:
 
 - Static RGB command is implemented as `[0x32, 0x52, PORT, FULL_MODE, COLOR]`.
 - Riing uses full mode `0x01` and RGB byte order.
-- Newer controllers, including LEDFanBox, use full mode `0x19` and GRB byte
-  order by default.
+- SWAFAN EX LEDFanBox uses raw mode `0x24` for static color and needs a
+  per-LED payload; `set-rgb --port-fans` calculates this for SWAFAN EX chains.
 - Commands: `set-rgb COLOR` and `rgb-off`.
 - Built-in RGB effects: `set-rgb-effect flow|spectrum|ripple|blink|pulse|wave|per-led slow|normal|fast|extreme`.
 - `set-rgb-effect --port-fans 1:3,2:3,3:3,4:1` calculates LED payload length

@@ -70,6 +70,7 @@ class ControllerFamily:
     write_len: int = REPORT_LEN
     rgb_full_mode: int = 0x19
     color_order: str = "grb"
+    rgb_full_requires_led_payload: bool = False
 
     def matches(self, pid: int) -> bool:
         return self.pid_start <= pid <= self.pid_end
@@ -81,7 +82,16 @@ FAMILIES = (
     ControllerFamily("Riing Trio", 0x2135, 0x2145, speed_mode=0x01),
     ControllerFamily("SWAFAN EX / Hiyatek", 0x2199, 0x21A8, speed_mode=0x01, can_save=False),
     ControllerFamily("Riing Quad", 0x2260, 0x2270, speed_mode=0x01, can_save=False),
-    ControllerFamily("SWAFAN EX LEDFanBox", 0x232B, 0x233A, speed_mode=0x01, can_save=False, write_len=193),
+    ControllerFamily(
+        "SWAFAN EX LEDFanBox",
+        0x232B,
+        0x233A,
+        speed_mode=0x01,
+        can_save=False,
+        write_len=193,
+        rgb_full_mode=0x24,
+        rgb_full_requires_led_payload=True,
+    ),
 )
 
 
@@ -150,9 +160,17 @@ class TTController:
         mode = self.info.family.speed_mode
         return self.command([0x32, 0x51, port, mode, speed])
 
-    def set_rgb(self, port: int, red: int, green: int, blue: int) -> list[int]:
-        colors = {"r": red, "g": green, "b": blue}
-        payload_color = [colors[channel] for channel in self.info.family.color_order]
+    def set_rgb(
+        self,
+        port: int,
+        red: int,
+        green: int,
+        blue: int,
+        led_count: int = 1,
+    ) -> list[int]:
+        payload_color = self.color_payload(red, green, blue)
+        if self.info.family.rgb_full_requires_led_payload:
+            payload_color *= max(1, led_count)
         return self.command([0x32, 0x52, port, self.info.family.rgb_full_mode, *payload_color])
 
     def color_payload(self, red: int, green: int, blue: int) -> list[int]:
@@ -367,11 +385,12 @@ def cmd_set_rgb(args: argparse.Namespace) -> None:
         with TTController(info) as ctrl:
             ctrl.init()
             for port in args.ports:
+                led_count = led_count_for_port(args, port)
                 print(
                     f"setting controller {controller_index} port {port} "
-                    f"rgb=#{red:02x}{green:02x}{blue:02x}"
+                    f"rgb=#{red:02x}{green:02x}{blue:02x} led_count={led_count}"
                 )
-                print_reply(ctrl.set_rgb(port, red, green, blue))
+                print_reply(ctrl.set_rgb(port, red, green, blue, led_count))
             if args.save:
                 print(f"saving profile on controller {controller_index}")
                 print_reply(ctrl.save())
@@ -1106,6 +1125,12 @@ def build_parser() -> argparse.ArgumentParser:
     rgb_parser.add_argument("-c", "--controller", type=int, default=0, help="Controller index from list")
     rgb_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     rgb_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
+    rgb_parser.add_argument("--led-count", type=int, default=20, help="LED count for controllers that need per-LED static payloads")
+    rgb_parser.add_argument(
+        "--port-fans",
+        default=None,
+        help="Fan count by port for SWAFAN EX chains, for example: 1:3,2:3,3:3,4:1",
+    )
     rgb_parser.add_argument("--save", action="store_true", help="Save to controller profile when supported")
     rgb_parser.set_defaults(func=cmd_set_rgb)
 
@@ -1113,6 +1138,12 @@ def build_parser() -> argparse.ArgumentParser:
     off_parser.add_argument("-c", "--controller", type=int, default=0, help="Controller index from list")
     off_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     off_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
+    off_parser.add_argument("--led-count", type=int, default=20, help="LED count for controllers that need per-LED static payloads")
+    off_parser.add_argument(
+        "--port-fans",
+        default=None,
+        help="Fan count by port for SWAFAN EX chains, for example: 1:3,2:3,3:3,4:1",
+    )
     off_parser.add_argument("--save", action="store_true", help="Save to controller profile when supported")
     off_parser.set_defaults(func=lambda args: cmd_set_rgb(argparse.Namespace(**vars(args), color="off")))
 

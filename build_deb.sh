@@ -39,6 +39,11 @@ Description: Thermaltake TT RGB Plus fan and RGB control for Linux
  automatic fan curves, monitoring, udev rules, and a systemd service.
 EOF
 
+cat > "${BUILD_DIR}/DEBIAN/conffiles" <<'EOF'
+/etc/default/tt-rgb-plus
+/etc/udev/rules.d/99-thermaltake-tt-rgb-plus.rules
+EOF
+
 cat > "${BUILD_DIR}/DEBIAN/postinst" <<'EOF'
 #!/usr/bin/env bash
 set -e

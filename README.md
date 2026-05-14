@@ -224,24 +224,6 @@ systemctl status tt-rgb-plus-auto.service
 journalctl -u tt-rgb-plus-auto.service -n 100 --no-pager
 ```
 
-If you see kernel messages like:
-
-```text
-usb usb8-port2: Cannot enable. Maybe the USB cable is bad?
-```
-
-compare the USB path with the LEDFanBox path:
-
-```bash
-dmesg -T | grep -iE 'usb8|264a|232b|LEDFanBox|hidraw'
-lsusb -t
-```
-
-On the tested system, the LEDFanBox was on `usb7` while the repeated kernel
-message came from `usb8-port2`, an unrelated USB 3.2/ASMedia root hub port.
-That kind of message usually points to a physical USB port, cable, front-panel
-header, hub, or BIOS/firmware issue, not this service.
-
 If your controller has a different PID, open an issue with:
 
 ```bash

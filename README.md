@@ -191,6 +191,15 @@ tt-rgb-plus auto-control \
 high speed. `flow` and `spectrum` use built-in circular effects and increase
 effect speed as fan speed rises.
 
+Color-by-speed mapping:
+
+- low speed: blue/cyan
+- medium speed: green/yellow
+- high speed: orange/red
+
+For SWAFAN EX chains, color sync sends a 60-LED payload by default, enough for
+up to 3 fans on one port.
+
 Legacy commands are still available:
 
 - `auto` for CPU/GPU load
@@ -213,7 +222,7 @@ sudo tt-rgb-plus config \
   --sensors Tctl nvidia nvme it87952 \
   --use-topology \
   --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 \
-  --rgb-style spectrum \
+  --rgb-style color \
   --restart
 ```
 

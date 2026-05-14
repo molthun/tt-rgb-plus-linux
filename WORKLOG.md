@@ -91,6 +91,7 @@ Files:
 - `list`
 - `sensors`
 - `monitor`
+- `config`
 - `status`
 - `set-speed`
 - `set-rgb`
@@ -150,6 +151,8 @@ Unified control:
 - `auto-control --mode load` delegates to CPU/GPU load control.
 - Packaged service config in `/etc/default/tt-rgb-plus` now uses
   `auto-control`, so users can switch modes by editing one option line.
+- `config` can generate `/etc/default/tt-rgb-plus` and optionally restart the
+  packaged service, for example `sudo tt-rgb-plus config --mode load --restart`.
 
 ## Commands to run on Ubuntu
 

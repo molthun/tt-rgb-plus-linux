@@ -156,7 +156,36 @@ Legacy commands are still available:
 
 ## Systemd Service
 
-Edit service options:
+Show current service options:
+
+```bash
+tt-rgb-plus config --show
+```
+
+Change service options with one command. Temperature mode for the tested
+AI-server setup:
+
+```bash
+sudo tt-rgb-plus config \
+  --mode temp \
+  --sensors Tctl nvidia nvme it87952 \
+  --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 \
+  --rgb-style spectrum \
+  --restart
+```
+
+Switch to CPU/GPU load mode:
+
+```bash
+sudo tt-rgb-plus config \
+  --mode load \
+  --load-source max \
+  --load-curve 0:20,30:30,50:50,70:75,90:100 \
+  --rgb-style spectrum \
+  --restart
+```
+
+Manual editing is also possible:
 
 ```bash
 sudo nano /etc/default/tt-rgb-plus

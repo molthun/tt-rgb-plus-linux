@@ -45,8 +45,8 @@ Download the latest `.deb` from GitHub Releases:
 
 ```bash
 cd /tmp
-wget -O tt-rgb-plus_0.2.0_all.deb https://github.com/molthun/tt-rgb-plus-linux/releases/download/v0.2.0/tt-rgb-plus_0.2.0_all.deb
-sudo apt install ./tt-rgb-plus_0.2.0_all.deb
+wget -O tt-rgb-plus_1.1.1_all.deb https://github.com/molthun/tt-rgb-plus-linux/releases/download/v1.1.1/tt-rgb-plus_1.1.1_all.deb
+sudo apt install ./tt-rgb-plus_1.1.1_all.deb
 ```
 
 The package installs:
@@ -55,6 +55,9 @@ The package installs:
 - `/etc/default/tt-rgb-plus`
 - `/etc/udev/rules.d/99-thermaltake-tt-rgb-plus.rules`
 - `/lib/systemd/system/tt-rgb-plus-auto.service`
+
+`/etc/default/tt-rgb-plus` is preserved as a Debian config file during package
+upgrades.
 
 Unplug and reconnect the controller after installing udev rules, or reboot.
 
@@ -204,9 +207,9 @@ tt-rgb-plus auto-control \
   --rgb-style spectrum
 ```
 
-`--rgb-style color` changes static color from blue/cyan at low speed to red at
-high speed. `flow` and `spectrum` use built-in circular effects and increase
-effect speed as fan speed rises.
+`--rgb-style color` changes static color from green at low values to red at high
+values. `flow` and `spectrum` use built-in circular effects and increase effect
+speed as fan speed rises.
 
 For `--rgb-style color`, choose what drives the color:
 
@@ -248,6 +251,7 @@ sudo tt-rgb-plus config \
   --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 \
   --rgb-style color \
   --rgb-source temp \
+  --rgb-refresh 2 \
   --restart
 ```
 
@@ -269,16 +273,16 @@ Manual editing is also possible:
 sudo nano /etc/default/tt-rgb-plus
 ```
 
-Default temperature mode:
+Example temperature mode:
 
 ```bash
-TT_RGB_PLUS_ARGS="auto-control --mode temp --sensors Tctl nvidia nvme it87952 --all-controllers --ports 1 2 3 4 5 --interval 2 --step 2 --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 --rgb-sync --rgb-style spectrum"
+TT_RGB_PLUS_ARGS="auto-control --mode temp --sensors Tctl nvidia nvme it87952 --use-topology --interval 2 --step 2 --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 --rgb-sync --rgb-style color --rgb-source temp --rgb-refresh 2"
 ```
 
 Alternative load mode:
 
 ```bash
-TT_RGB_PLUS_ARGS="auto-control --mode load --load-source max --all-controllers --ports 1 2 3 4 5 --interval 2 --step 2 --load-curve 0:20,30:30,50:50,70:75,90:100 --rgb-sync --rgb-style spectrum"
+TT_RGB_PLUS_ARGS="auto-control --mode load --load-source max --use-topology --interval 2 --step 2 --load-curve 0:20,30:30,50:50,70:75,90:100 --rgb-sync --rgb-style color --rgb-source load --rgb-refresh 2"
 ```
 
 Enable and start:
@@ -305,8 +309,8 @@ journalctl -u tt-rgb-plus-auto.service -f
 git clone https://github.com/molthun/tt-rgb-plus-linux.git
 cd tt-rgb-plus-linux
 chmod +x build_deb.sh
-./build_deb.sh 0.2.0
-sudo apt install ./dist/tt-rgb-plus_0.2.0_all.deb
+./build_deb.sh 1.1.1
+sudo apt install ./dist/tt-rgb-plus_1.1.1_all.deb
 ```
 
 For direct source usage:

@@ -552,9 +552,9 @@ def interpolate_color(left: tuple[int, int, int], right: tuple[int, int, int], p
 
 def color_from_speed(speed: int) -> tuple[int, int, int]:
     points = [
-        (0, (0, 90, 255)),
-        (25, (0, 220, 255)),
-        (45, (0, 255, 120)),
+        (0, (0, 255, 0)),
+        (25, (80, 255, 0)),
+        (45, (180, 255, 0)),
         (65, (255, 220, 0)),
         (80, (255, 90, 0)),
         (100, (255, 0, 0)),

@@ -191,10 +191,10 @@ tt-rgb-plus auto-control \
 high speed. `flow` and `spectrum` use built-in circular effects and increase
 effect speed as fan speed rises.
 
-Color-by-speed mapping:
+Default color-by-speed mapping:
 
-- low speed: blue/cyan
-- medium speed: green/yellow
+- low speed: green
+- medium speed: yellow
 - high speed: orange/red
 
 For SWAFAN EX chains, color sync sends a 60-LED payload by default, enough for

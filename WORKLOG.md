@@ -92,6 +92,7 @@ Files:
 - `sensors`
 - `monitor`
 - `config`
+- `topology`
 - `status`
 - `set-speed`
 - `set-rgb`
@@ -157,6 +158,9 @@ Unified control:
   `auto-control`, so users can switch modes by editing one option line.
 - `config` can generate `/etc/default/tt-rgb-plus` and optionally restart the
   packaged service, for example `sudo tt-rgb-plus config --mode load --restart`.
+- `topology` stores controller/port/fan counts in `/etc/tt-rgb-plus/topology.json`.
+  RGB commands and `config --use-topology` can then target only occupied ports
+  and calculate LED payload sizes automatically.
 
 ## Commands to run on Ubuntu
 

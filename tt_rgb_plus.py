@@ -41,6 +41,7 @@ THERMALTAKE_VID = 0x264A
 REPORT_LEN = 64
 DEFAULT_STATE_FILE = "/run/tt-rgb-plus/state.json"
 DEFAULT_CONFIG_FILE = "/etc/default/tt-rgb-plus"
+DEFAULT_TOPOLOGY_FILE = "/etc/tt-rgb-plus/topology.json"
 SERVICE_NAME = "tt-rgb-plus-auto.service"
 RGB_SPEEDS = {
     "extreme": 0x00,
@@ -252,6 +253,44 @@ def select_controllers(index: int, all_controllers: bool) -> list[ControllerInfo
     return [select_controller(index)]
 
 
+def controller_fingerprint(info: ControllerInfo) -> str:
+    return f"{info.vendor_id:04x}:{info.product_id:04x}:{info.serial_number or '-'}:{info.product_string or '-'}"
+
+
+def topology_controllers(path: str = DEFAULT_TOPOLOGY_FILE) -> list[dict[str, object]]:
+    topology = read_json_file(path)
+    controllers = topology.get("controllers", []) if topology else []
+    return controllers if isinstance(controllers, list) else []
+
+
+def topology_for_index(index: int, path: str = DEFAULT_TOPOLOGY_FILE) -> dict[str, object] | None:
+    for item in topology_controllers(path):
+        if isinstance(item, dict) and item.get("index") == index:
+            return item
+    return None
+
+
+def topology_ports_for_index(index: int, path: str = DEFAULT_TOPOLOGY_FILE) -> list[int] | None:
+    item = topology_for_index(index, path)
+    if not item:
+        return None
+    ports = item.get("ports", {})
+    if not isinstance(ports, dict):
+        return None
+    return sorted(int(port) for port in ports)
+
+
+def topology_fans_for_port(index: int, port: int, path: str = DEFAULT_TOPOLOGY_FILE) -> int | None:
+    item = topology_for_index(index, path)
+    if not item:
+        return None
+    ports = item.get("ports", {})
+    if not isinstance(ports, dict):
+        return None
+    value = ports.get(str(port), ports.get(port))
+    return int(value) if value is not None else None
+
+
 def print_reply(reply: list[int]) -> None:
     compact = " ".join(f"{byte:02x}" for byte in reply[:8])
     print(f"reply: {compact}")
@@ -277,6 +316,18 @@ def read_state(path: str) -> dict[str, object] | None:
         return None
     except (OSError, json.JSONDecodeError) as exc:
         print(f"warning: failed to read state file {path}: {exc}", file=sys.stderr)
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def read_json_file(path: str) -> dict[str, object] | None:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"warning: failed to read {path}: {exc}", file=sys.stderr)
         return None
     return data if isinstance(data, dict) else None
 
@@ -381,10 +432,14 @@ def cmd_set_rgb(args: argparse.Namespace) -> None:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 
-    for controller_index, info in enumerate(select_controllers(args.controller, args.all_controllers)):
+    all_infos = find_controllers()
+    selected_pairs = list(enumerate(all_infos)) if args.all_controllers else [(args.controller, select_controller(args.controller))]
+    for controller_index, info in selected_pairs:
         with TTController(info) as ctrl:
             ctrl.init()
-            for port in args.ports:
+            ports = topology_ports_for_index(controller_index, args.topology_file) if args.use_topology else None
+            for port in ports or args.ports:
+                args.topology_controller_index = controller_index if args.use_topology else None
                 led_count = led_count_for_port(args, port)
                 print(
                     f"setting controller {controller_index} port {port} "
@@ -434,12 +489,19 @@ def cmd_scan_rgb_modes(args: argparse.Namespace) -> None:
 
 
 def led_count_for_port(args: argparse.Namespace, port: int) -> int:
+    topology_index = getattr(args, "topology_controller_index", None)
+    topology_path = getattr(args, "topology_file", DEFAULT_TOPOLOGY_FILE)
+    if topology_index is not None:
+        fans = topology_fans_for_port(topology_index, port, topology_path)
+        if fans is not None:
+            return fans * LEDS_PER_SWAFAN_EX_FAN
     if args.port_fans:
         try:
             mapping = parse_port_fans(args.port_fans)
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
-        return mapping.get(port, args.led_count) * LEDS_PER_SWAFAN_EX_FAN
+        if port in mapping:
+            return mapping[port] * LEDS_PER_SWAFAN_EX_FAN
     return args.led_count
 
 
@@ -464,10 +526,14 @@ def effect_colors(args: argparse.Namespace, port: int) -> list[tuple[int, int, i
 
 
 def cmd_set_rgb_effect(args: argparse.Namespace) -> None:
-    for controller_index, info in enumerate(select_controllers(args.controller, args.all_controllers)):
+    all_infos = find_controllers()
+    selected_pairs = list(enumerate(all_infos)) if args.all_controllers else [(args.controller, select_controller(args.controller))]
+    for controller_index, info in selected_pairs:
         with TTController(info) as ctrl:
             ctrl.init()
-            for port in args.ports:
+            ports = topology_ports_for_index(controller_index, args.topology_file) if args.use_topology else None
+            for port in ports or args.ports:
+                args.topology_controller_index = controller_index if args.use_topology else None
                 colors = effect_colors(args, port)
                 led_count = len(colors) if RGB_EFFECTS[args.effect]["colors"] == "leds" else "-"
                 print(
@@ -803,6 +869,16 @@ def cmd_config(args: argparse.Namespace) -> None:
             raise SystemExit(f"Config file not found: {args.path}")
         return
 
+    if args.use_topology:
+        topology_ports = set()
+        for item in topology_controllers(args.topology_file):
+            if isinstance(item, dict):
+                ports = item.get("ports", {})
+                if isinstance(ports, dict):
+                    topology_ports.update(int(port) for port in ports)
+        if topology_ports:
+            args.ports = sorted(topology_ports)
+
     command = build_auto_control_args(args)
     text = default_config_text(command)
     print(text, end="")
@@ -821,6 +897,68 @@ def cmd_config(args: argparse.Namespace) -> None:
         subprocess.run(["systemctl", "daemon-reload"], check=False)
         subprocess.run(["systemctl", "restart", SERVICE_NAME], check=True)
         print(f"restarted: {SERVICE_NAME}")
+
+
+def cmd_topology(args: argparse.Namespace) -> None:
+    if args.topology_command == "show":
+        topology = read_json_file(args.path)
+        if not topology:
+            print(f"No topology file at {args.path}")
+            return
+        print(json.dumps(topology, indent=2, sort_keys=True))
+        return
+
+    if args.topology_command == "detect":
+        controllers = find_controllers()
+        data = {
+            "leds_per_fan": LEDS_PER_SWAFAN_EX_FAN,
+            "controllers": [
+                {
+                    "index": idx,
+                    "vid_pid": f"{info.vendor_id:04x}:{info.product_id:04x}",
+                    "name": info.product_string or info.family.name,
+                    "serial": info.serial_number or "-",
+                    "fingerprint": controller_fingerprint(info),
+                    "ports": {},
+                }
+                for idx, info in enumerate(controllers)
+            ],
+        }
+        print(json.dumps(data, indent=2, sort_keys=True))
+        return
+
+    controllers = find_controllers()
+    data = {
+        "leds_per_fan": LEDS_PER_SWAFAN_EX_FAN,
+        "controllers": [],
+    }
+    for idx, info in enumerate(controllers):
+        if idx >= len(args.controllers):
+            break
+        ports = parse_port_fans(args.controllers[idx])
+        data["controllers"].append(
+            {
+                "index": idx,
+                "vid_pid": f"{info.vendor_id:04x}:{info.product_id:04x}",
+                "name": info.product_string or info.family.name,
+                "serial": info.serial_number or "-",
+                "fingerprint": controller_fingerprint(info),
+                "ports": {str(port): fans for port, fans in sorted(ports.items())},
+            }
+        )
+
+    if args.dry_run:
+        print(json.dumps(data, indent=2, sort_keys=True))
+        return
+
+    try:
+        os.makedirs(os.path.dirname(args.path), exist_ok=True)
+        with open(args.path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    except PermissionError as exc:
+        raise SystemExit(f"Permission denied writing {args.path}. Run with sudo.") from exc
+    print(f"written: {args.path}")
 
 
 def cmd_auto(args: argparse.Namespace) -> None:
@@ -1049,11 +1187,31 @@ def build_parser() -> argparse.ArgumentParser:
     monitor_parser.add_argument("--clear", action="store_true", help="Clear screen between refreshes")
     monitor_parser.set_defaults(func=cmd_monitor)
 
+    topology_parser = sub.add_parser("topology", help="Manage controller/port/fan topology")
+    topology_sub = topology_parser.add_subparsers(dest="topology_command", required=True)
+    topology_show = topology_sub.add_parser("show", help="Show saved topology")
+    topology_show.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
+    topology_show.set_defaults(func=cmd_topology)
+    topology_detect = topology_sub.add_parser("detect", help="Print detected controllers as topology template")
+    topology_detect.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
+    topology_detect.set_defaults(func=cmd_topology)
+    topology_set = topology_sub.add_parser("set", help="Save fan counts per controller")
+    topology_set.add_argument(
+        "controllers",
+        nargs="+",
+        help="One port:fans map per detected controller, for example: '1:3,2:3' '1:3,2:1'",
+    )
+    topology_set.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
+    topology_set.add_argument("--dry-run", action="store_true", help="Print topology without writing")
+    topology_set.set_defaults(func=cmd_topology)
+
     config_parser = sub.add_parser("config", help="Write /etc/default service config")
     config_parser.add_argument("--show", action="store_true", help="Print current config and exit")
     config_parser.add_argument("--path", default=DEFAULT_CONFIG_FILE, help="Config file path")
     config_parser.add_argument("--dry-run", action="store_true", help="Print generated config without writing it")
     config_parser.add_argument("--restart", action="store_true", help="Restart tt-rgb-plus-auto.service after writing")
+    config_parser.add_argument("--use-topology", action="store_true", help="Use saved topology to choose occupied ports")
+    config_parser.add_argument("--topology-file", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     config_parser.add_argument(
         "--mode",
         choices=["temp", "load"],
@@ -1126,6 +1284,8 @@ def build_parser() -> argparse.ArgumentParser:
     rgb_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     rgb_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
     rgb_parser.add_argument("--led-count", type=int, default=20, help="LED count for controllers that need per-LED static payloads")
+    rgb_parser.add_argument("--use-topology", action="store_true", help="Use saved topology for ports and LED counts")
+    rgb_parser.add_argument("--topology-file", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     rgb_parser.add_argument(
         "--port-fans",
         default=None,
@@ -1139,6 +1299,8 @@ def build_parser() -> argparse.ArgumentParser:
     off_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     off_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
     off_parser.add_argument("--led-count", type=int, default=20, help="LED count for controllers that need per-LED static payloads")
+    off_parser.add_argument("--use-topology", action="store_true", help="Use saved topology for ports and LED counts")
+    off_parser.add_argument("--topology-file", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     off_parser.add_argument(
         "--port-fans",
         default=None,
@@ -1177,6 +1339,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated colors for per-LED effects, for example '#ff0000,#00ff00,#0000ff'",
     )
     effect_parser.add_argument("--led-count", type=int, default=20, help="LED count for per-LED effects")
+    effect_parser.add_argument("--use-topology", action="store_true", help="Use saved topology for ports and LED counts")
+    effect_parser.add_argument("--topology-file", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     effect_parser.add_argument(
         "--port-fans",
         default=None,

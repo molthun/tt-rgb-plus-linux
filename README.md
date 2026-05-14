@@ -124,6 +124,26 @@ tt-rgb-plus monitor
 tt-rgb-plus monitor --watch --clear
 ```
 
+Save your physical layout once, then reuse it:
+
+```bash
+tt-rgb-plus topology detect
+sudo tt-rgb-plus topology set '1:3,2:3' '1:3,2:1'
+tt-rgb-plus topology show
+```
+
+The example means:
+
+- controller `0`: port 1 has 3 fans, port 2 has 3 fans
+- controller `1`: port 1 has 3 fans, port 2 has 1 fan
+
+After that, RGB commands can use topology instead of repeating port/fan counts:
+
+```bash
+tt-rgb-plus set-rgb red --use-topology --all-controllers
+tt-rgb-plus set-rgb-effect wave fast --color '#00aaff' --use-topology --all-controllers
+```
+
 ## Automatic Control
 
 `auto-control` is the recommended command for services. It supports two modes:
@@ -185,6 +205,7 @@ AI-server setup:
 sudo tt-rgb-plus config \
   --mode temp \
   --sensors Tctl nvidia nvme it87952 \
+  --use-topology \
   --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 \
   --rgb-style spectrum \
   --restart
@@ -196,6 +217,7 @@ Switch to CPU/GPU load mode:
 sudo tt-rgb-plus config \
   --mode load \
   --load-source max \
+  --use-topology \
   --load-curve 0:20,30:30,50:50,70:75,90:100 \
   --rgb-style spectrum \
   --restart

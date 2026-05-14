@@ -124,6 +124,20 @@ Use the hottest of several important sensors, useful for AI servers:
 python3 tt_rgb_plus.py auto-temp --sensors Tctl nvidia nvme --all-controllers --ports 1 2 3 4 5 --curve 30:18,40:24,50:38,60:58,70:80,80:100
 ```
 
+Use the unified service-friendly command and choose control mode:
+
+```bash
+tt-rgb-plus auto-control --mode temp --sensors Tctl nvidia nvme it87952 --all-controllers --ports 1 2 3 4 5 --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 --rgb-sync --rgb-style spectrum
+tt-rgb-plus auto-control --mode load --load-source max --all-controllers --ports 1 2 3 4 5 --load-curve 0:20,30:30,50:50,70:75,90:100 --rgb-sync --rgb-style spectrum
+```
+
+For packaged installs, switch between temperature and load control by editing:
+
+```bash
+sudo nano /etc/default/tt-rgb-plus
+sudo systemctl restart tt-rgb-plus-auto.service
+```
+
 Sync circular RGB with fan speed:
 
 ```bash

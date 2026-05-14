@@ -98,6 +98,7 @@ Files:
 - `set-rgb-effect`
 - `auto`
 - `auto-temp`
+- `auto-control`
 
 Current known controller profiles:
 
@@ -142,6 +143,13 @@ Temperature mode:
 - `auto-temp` writes current state to `/run/tt-rgb-plus/state.json`.
 - `monitor` reads this state and prints controller info, selected sensor,
   calculated fan speed, RGB mode, and all temperatures without opening HID.
+
+Unified control:
+
+- `auto-control --mode temp` delegates to temperature control.
+- `auto-control --mode load` delegates to CPU/GPU load control.
+- Packaged service config in `/etc/default/tt-rgb-plus` now uses
+  `auto-control`, so users can switch modes by editing one option line.
 
 ## Commands to run on Ubuntu
 

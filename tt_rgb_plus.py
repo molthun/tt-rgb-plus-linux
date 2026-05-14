@@ -610,10 +610,14 @@ def cmd_auto(args: argparse.Namespace) -> None:
     curve = parse_curve(args.curve)
     infos = select_controllers(args.controller, args.all_controllers)
     last_speed: int | None = None
+    last_rgb_speed: int | None = None
     last_write = 0.0
 
     print(f"auto mode: controllers={len(infos)} ports={','.join(map(str, args.ports))}")
+    print(f"source: {args.source}")
     print(f"curve: {', '.join(f'{load}%->{speed}%' for load, speed in curve)}")
+    if args.rgb_sync:
+        print(f"rgb sync: {args.rgb_style}")
     print("press Ctrl+C to stop")
 
     with_counters = [TTController(info) for info in infos]
@@ -658,6 +662,36 @@ def cmd_auto(args: argparse.Namespace) -> None:
                 last_write = now
                 gpu_text = "n/a" if gpu is None else f"{gpu:.0f}%"
                 print(f"cpu={cpu:.0f}% gpu={gpu_text} load={active_load:.0f}% speed={target_speed}%")
+
+            should_write_rgb = (
+                args.rgb_sync
+                and (
+                    last_rgb_speed is None
+                    or abs(target_speed - last_rgb_speed) >= args.rgb_step
+                    or should_write
+                )
+            )
+            if should_write_rgb:
+                for ctrl in with_counters:
+                    apply_synced_rgb(ctrl, args.ports, target_speed, args.rgb_style)
+                last_rgb_speed = target_speed
+
+            write_state(
+                args.state_file,
+                {
+                    "mode": "auto-load",
+                    "time": datetime.now().isoformat(timespec="seconds"),
+                    "source": args.source,
+                    "cpu_load_percent": round(cpu, 1),
+                    "gpu_load_percent": None if gpu is None else round(gpu, 1),
+                    "active_load_percent": round(active_load, 1),
+                    "target_speed_percent": target_speed,
+                    "ports": args.ports,
+                    "controllers": len(infos),
+                    "rgb": args.rgb_style if args.rgb_sync else "off",
+                    "curve": args.curve,
+                },
+            )
 
             time.sleep(args.interval)
     finally:
@@ -745,6 +779,41 @@ def cmd_auto_temp(args: argparse.Namespace) -> None:
             ctrl.close()
 
 
+def cmd_auto_control(args: argparse.Namespace) -> None:
+    common = {
+        "controller": args.controller,
+        "all_controllers": args.all_controllers,
+        "ports": args.ports,
+        "interval": args.interval,
+        "refresh": args.refresh,
+        "step": args.step,
+        "min_speed": args.min_speed,
+        "max_speed": args.max_speed,
+        "rgb_sync": args.rgb_sync,
+        "rgb_style": args.rgb_style,
+        "rgb_step": args.rgb_step,
+        "state_file": args.state_file,
+    }
+    if args.mode == "temp":
+        cmd_auto_temp(
+            argparse.Namespace(
+                **common,
+                source=args.temp_source,
+                sensor=args.sensor,
+                sensors=args.sensors,
+                curve=args.temp_curve,
+            )
+        )
+    else:
+        cmd_auto(
+            argparse.Namespace(
+                **common,
+                source=args.load_source,
+                curve=args.load_curve,
+            )
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Thermaltake TT RGB Plus fan control for Ubuntu/Linux")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -821,6 +890,15 @@ def build_parser() -> argparse.ArgumentParser:
     auto_parser.add_argument("--step", type=int, default=3, help="Only write when speed changes by at least N percent")
     auto_parser.add_argument("--min-speed", type=int, default=None, help="Clamp minimum speed")
     auto_parser.add_argument("--max-speed", type=int, default=None, help="Clamp maximum speed")
+    auto_parser.add_argument("--rgb-sync", action="store_true", help="Also sync RGB with current fan speed")
+    auto_parser.add_argument(
+        "--rgb-style",
+        choices=["color", "flow", "spectrum"],
+        default="color",
+        help="RGB sync style: color changes color, flow/spectrum use circular built-in effects",
+    )
+    auto_parser.add_argument("--rgb-step", type=int, default=5, help="Only update RGB when speed changes by N percent")
+    auto_parser.add_argument("--state-file", default=DEFAULT_STATE_FILE, help="Write current auto-control state here")
     auto_parser.set_defaults(func=cmd_auto)
 
     auto_temp_parser = sub.add_parser("auto-temp", help="Automatically adjust speed from CPU/GPU temperature")
@@ -868,6 +946,68 @@ def build_parser() -> argparse.ArgumentParser:
     auto_temp_parser.add_argument("--rgb-step", type=int, default=5, help="Only update RGB when speed changes by N percent")
     auto_temp_parser.add_argument("--state-file", default=DEFAULT_STATE_FILE, help="Write current auto-control state here")
     auto_temp_parser.set_defaults(func=cmd_auto_temp)
+
+    auto_control_parser = sub.add_parser(
+        "auto-control",
+        help="Automatically adjust speed by selected mode: temperature or CPU/GPU load",
+    )
+    auto_control_parser.add_argument(
+        "--mode",
+        choices=["temp", "load"],
+        default="temp",
+        help="Control by temperature or by CPU/GPU load",
+    )
+    auto_control_parser.add_argument("-c", "--controller", type=int, default=0, help="Controller index from list")
+    auto_control_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
+    auto_control_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
+    auto_control_parser.add_argument(
+        "--temp-source",
+        choices=["cpu", "gpu", "max"],
+        default="max",
+        help="Temperature mode: use CPU, GPU, or hottest available sensor",
+    )
+    auto_control_parser.add_argument(
+        "--sensor",
+        default=None,
+        help="Temperature mode: use sensors whose chip/label contains this text",
+    )
+    auto_control_parser.add_argument(
+        "--sensors",
+        nargs="+",
+        default=None,
+        help="Temperature mode: use hottest sensor matching any listed text, for example: Tctl nvidia nvme",
+    )
+    auto_control_parser.add_argument(
+        "--temp-curve",
+        default="30:18,40:24,50:38,60:58,70:80,80:100",
+        help="Temperature-to-speed curve",
+    )
+    auto_control_parser.add_argument(
+        "--load-source",
+        choices=["cpu", "gpu", "max"],
+        default="max",
+        help="Load mode: use CPU load, GPU load, or the higher value",
+    )
+    auto_control_parser.add_argument(
+        "--load-curve",
+        default="0:20,30:30,50:50,70:75,90:100",
+        help="Load-to-speed curve",
+    )
+    auto_control_parser.add_argument("--interval", type=float, default=2.0, help="Seconds between checks")
+    auto_control_parser.add_argument("--refresh", type=float, default=15.0, help="Force write every N seconds")
+    auto_control_parser.add_argument("--step", type=int, default=3, help="Only write when speed changes by at least N percent")
+    auto_control_parser.add_argument("--min-speed", type=int, default=None, help="Clamp minimum speed")
+    auto_control_parser.add_argument("--max-speed", type=int, default=None, help="Clamp maximum speed")
+    auto_control_parser.add_argument("--rgb-sync", action="store_true", help="Also sync RGB with current fan speed")
+    auto_control_parser.add_argument(
+        "--rgb-style",
+        choices=["color", "flow", "spectrum"],
+        default="color",
+        help="RGB sync style: color changes color, flow/spectrum use circular built-in effects",
+    )
+    auto_control_parser.add_argument("--rgb-step", type=int, default=5, help="Only update RGB when speed changes by N percent")
+    auto_control_parser.add_argument("--state-file", default=DEFAULT_STATE_FILE, help="Write current auto-control state here")
+    auto_control_parser.set_defaults(func=cmd_auto_control)
 
     return parser
 

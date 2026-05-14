@@ -4,5 +4,11 @@
 # - use CPU Tctl, NVIDIA GPU, NVMe, and IT87952 motherboard/case sensors
 # - apply to all detected Thermaltake controllers and ports 1-5
 # - sync circular RGB with calculated fan speed
+#
+# Temperature mode:
+# TT_RGB_PLUS_ARGS="auto-control --mode temp --sensors Tctl nvidia nvme it87952 --all-controllers --ports 1 2 3 4 5 --interval 2 --step 2 --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 --rgb-sync --rgb-style spectrum"
+#
+# Load mode:
+# TT_RGB_PLUS_ARGS="auto-control --mode load --load-source max --all-controllers --ports 1 2 3 4 5 --interval 2 --step 2 --load-curve 0:20,30:30,50:50,70:75,90:100 --rgb-sync --rgb-style spectrum"
 
-TT_RGB_PLUS_ARGS="auto-temp --sensors Tctl nvidia nvme it87952 --all-controllers --ports 1 2 3 4 5 --interval 2 --step 2 --curve 30:18,40:24,50:38,60:58,70:80,80:100 --rgb-sync --rgb-style spectrum"
+TT_RGB_PLUS_ARGS="auto-control --mode temp --sensors Tctl nvidia nvme it87952 --all-controllers --ports 1 2 3 4 5 --interval 2 --step 2 --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 --rgb-sync --rgb-style spectrum"

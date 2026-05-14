@@ -93,6 +93,7 @@ Files:
 - `monitor`
 - `config`
 - `topology`
+- `group`
 - `status`
 - `set-speed`
 - `set-rgb`
@@ -164,6 +165,8 @@ Unified control:
 - `topology wizard` turns all checked ports off once, lights ports red one at a
   time, asks how many fans lit up, and leaves detected ports in a normal RGB
   effect while continuing.
+- `group` stores named groups in topology, such as intake/exhaust zones, and
+  `set-rgb`, `rgb-off`, and `set-rgb-effect` can target `--group NAME`.
 
 ## Commands to run on Ubuntu
 

@@ -291,6 +291,22 @@ def topology_fans_for_port(index: int, port: int, path: str = DEFAULT_TOPOLOGY_F
     return int(value) if value is not None else None
 
 
+def topology_group(name: str, path: str = DEFAULT_TOPOLOGY_FILE) -> list[tuple[int, int]]:
+    topology = read_json_file(path)
+    groups = topology.get("groups", {}) if topology else {}
+    if not isinstance(groups, dict) or name not in groups:
+        raise SystemExit(f"Topology group not found: {name}")
+    raw_items = groups[name]
+    if not isinstance(raw_items, list):
+        raise SystemExit(f"Topology group is invalid: {name}")
+    result = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        result.append((int(item["controller"]), int(item["port"])))
+    return result
+
+
 def print_reply(reply: list[int]) -> None:
     compact = " ".join(f"{byte:02x}" for byte in reply[:8])
     print(f"reply: {compact}")
@@ -433,13 +449,24 @@ def cmd_set_rgb(args: argparse.Namespace) -> None:
         raise SystemExit(str(exc)) from exc
 
     all_infos = find_controllers()
-    selected_pairs = list(enumerate(all_infos)) if args.all_controllers else [(args.controller, select_controller(args.controller))]
-    for controller_index, info in selected_pairs:
+    if args.group:
+        grouped = topology_group(args.group, args.topology_file)
+        selected_pairs = [(idx, all_infos[idx], [port]) for idx, port in grouped]
+    else:
+        selected = list(enumerate(all_infos)) if args.all_controllers else [(args.controller, select_controller(args.controller))]
+        selected_pairs = [
+            (
+                idx,
+                info,
+                topology_ports_for_index(idx, args.topology_file) if args.use_topology else args.ports,
+            )
+            for idx, info in selected
+        ]
+    for controller_index, info, selected_ports in selected_pairs:
         with TTController(info) as ctrl:
             ctrl.init()
-            ports = topology_ports_for_index(controller_index, args.topology_file) if args.use_topology else None
-            for port in ports or args.ports:
-                args.topology_controller_index = controller_index if args.use_topology else None
+            for port in selected_ports or []:
+                args.topology_controller_index = controller_index if args.use_topology or args.group else None
                 led_count = led_count_for_port(args, port)
                 print(
                     f"setting controller {controller_index} port {port} "
@@ -527,13 +554,24 @@ def effect_colors(args: argparse.Namespace, port: int) -> list[tuple[int, int, i
 
 def cmd_set_rgb_effect(args: argparse.Namespace) -> None:
     all_infos = find_controllers()
-    selected_pairs = list(enumerate(all_infos)) if args.all_controllers else [(args.controller, select_controller(args.controller))]
-    for controller_index, info in selected_pairs:
+    if args.group:
+        grouped = topology_group(args.group, args.topology_file)
+        selected_pairs = [(idx, all_infos[idx], [port]) for idx, port in grouped]
+    else:
+        selected = list(enumerate(all_infos)) if args.all_controllers else [(args.controller, select_controller(args.controller))]
+        selected_pairs = [
+            (
+                idx,
+                info,
+                topology_ports_for_index(idx, args.topology_file) if args.use_topology else args.ports,
+            )
+            for idx, info in selected
+        ]
+    for controller_index, info, selected_ports in selected_pairs:
         with TTController(info) as ctrl:
             ctrl.init()
-            ports = topology_ports_for_index(controller_index, args.topology_file) if args.use_topology else None
-            for port in ports or args.ports:
-                args.topology_controller_index = controller_index if args.use_topology else None
+            for port in selected_ports or []:
+                args.topology_controller_index = controller_index if args.use_topology or args.group else None
                 colors = effect_colors(args, port)
                 led_count = len(colors) if RGB_EFFECTS[args.effect]["colors"] == "leds" else "-"
                 print(
@@ -1042,6 +1080,43 @@ def cmd_topology(args: argparse.Namespace) -> None:
     print(f"written: {args.path}")
 
 
+def parse_group_items(values: list[str]) -> list[dict[str, int]]:
+    result = []
+    for value in values:
+        controller_raw, port_raw = value.split(":", 1)
+        result.append({"controller": int(controller_raw), "port": int(port_raw)})
+    return result
+
+
+def cmd_group(args: argparse.Namespace) -> None:
+    topology = read_json_file(args.path) or {"leds_per_fan": LEDS_PER_SWAFAN_EX_FAN, "controllers": []}
+    groups = topology.get("groups", {})
+    if not isinstance(groups, dict):
+        groups = {}
+
+    if args.group_command == "show":
+        print(json.dumps(groups, indent=2, sort_keys=True))
+        return
+
+    if args.group_command == "delete":
+        groups.pop(args.name, None)
+    else:
+        groups[args.name] = parse_group_items(args.items)
+
+    topology["groups"] = groups
+    if args.dry_run:
+        print(json.dumps(topology, indent=2, sort_keys=True))
+        return
+    try:
+        os.makedirs(os.path.dirname(args.path), exist_ok=True)
+        with open(args.path, "w", encoding="utf-8") as handle:
+            json.dump(topology, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+    except PermissionError as exc:
+        raise SystemExit(f"Permission denied writing {args.path}. Run with sudo.") from exc
+    print(f"written: {args.path}")
+
+
 def cmd_auto(args: argparse.Namespace) -> None:
     curve = parse_curve(args.curve)
     infos = select_controllers(args.controller, args.all_controllers)
@@ -1302,6 +1377,23 @@ def build_parser() -> argparse.ArgumentParser:
     topology_set.add_argument("--dry-run", action="store_true", help="Print topology without writing")
     topology_set.set_defaults(func=cmd_topology)
 
+    group_parser = sub.add_parser("group", help="Manage named topology groups")
+    group_sub = group_parser.add_subparsers(dest="group_command", required=True)
+    group_show = group_sub.add_parser("show", help="Show saved groups")
+    group_show.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
+    group_show.set_defaults(func=cmd_group)
+    group_set = group_sub.add_parser("set", help="Save a named group")
+    group_set.add_argument("name", help="Group name, for example: intake")
+    group_set.add_argument("items", nargs="+", help="Controller:port items, for example: 0:1 0:2 1:1")
+    group_set.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
+    group_set.add_argument("--dry-run", action="store_true", help="Print topology without writing")
+    group_set.set_defaults(func=cmd_group)
+    group_delete = group_sub.add_parser("delete", help="Delete a named group")
+    group_delete.add_argument("name", help="Group name")
+    group_delete.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
+    group_delete.add_argument("--dry-run", action="store_true", help="Print topology without writing")
+    group_delete.set_defaults(func=cmd_group)
+
     config_parser = sub.add_parser("config", help="Write /etc/default service config")
     config_parser.add_argument("--show", action="store_true", help="Print current config and exit")
     config_parser.add_argument("--path", default=DEFAULT_CONFIG_FILE, help="Config file path")
@@ -1383,6 +1475,7 @@ def build_parser() -> argparse.ArgumentParser:
     rgb_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     rgb_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
     rgb_parser.add_argument("--led-count", type=int, default=20, help="LED count for controllers that need per-LED static payloads")
+    rgb_parser.add_argument("--group", default=None, help="Apply to a named topology group")
     rgb_parser.add_argument("--use-topology", action="store_true", help="Use saved topology for ports and LED counts")
     rgb_parser.add_argument("--topology-file", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     rgb_parser.add_argument(
@@ -1398,6 +1491,7 @@ def build_parser() -> argparse.ArgumentParser:
     off_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     off_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
     off_parser.add_argument("--led-count", type=int, default=20, help="LED count for controllers that need per-LED static payloads")
+    off_parser.add_argument("--group", default=None, help="Apply to a named topology group")
     off_parser.add_argument("--use-topology", action="store_true", help="Use saved topology for ports and LED counts")
     off_parser.add_argument("--topology-file", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     off_parser.add_argument(
@@ -1438,6 +1532,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated colors for per-LED effects, for example '#ff0000,#00ff00,#0000ff'",
     )
     effect_parser.add_argument("--led-count", type=int, default=20, help="LED count for per-LED effects")
+    effect_parser.add_argument("--group", default=None, help="Apply to a named topology group")
     effect_parser.add_argument("--use-topology", action="store_true", help="Use saved topology for ports and LED counts")
     effect_parser.add_argument("--topology-file", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     effect_parser.add_argument(

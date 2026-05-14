@@ -150,6 +150,23 @@ tt-rgb-plus set-rgb red --use-topology --all-controllers
 tt-rgb-plus set-rgb-effect wave fast --color '#00aaff' --use-topology --all-controllers
 ```
 
+Named groups can be used for intake/exhaust or any physical zone:
+
+```bash
+sudo tt-rgb-plus group set intake 0:1 0:2 1:1
+sudo tt-rgb-plus group set exhaust 1:2
+tt-rgb-plus group show
+```
+
+Then control only that group:
+
+```bash
+tt-rgb-plus rgb-off --group intake
+tt-rgb-plus set-rgb green --group intake
+tt-rgb-plus set-rgb red --group exhaust
+tt-rgb-plus set-rgb-effect spectrum slow --group intake
+```
+
 ## Automatic Control
 
 `auto-control` is the recommended command for services. It supports two modes:

@@ -92,6 +92,15 @@ tt-rgb-plus set-rgb-effect spectrum slow --all-controllers --ports 1 2 3 4 5
 tt-rgb-plus set-rgb-effect flow normal --all-controllers --ports 1 2 3 4 5
 ```
 
+Other RGB effects:
+
+```bash
+tt-rgb-plus set-rgb-effect ripple fast --color '#00aaff' --all-controllers --ports 1 2 3 4 5
+tt-rgb-plus set-rgb-effect pulse normal --color red --led-count 20 --all-controllers --ports 1 2 3 4 5
+tt-rgb-plus set-rgb-effect wave slow --color '#ffaa00' --led-count 20 --all-controllers --ports 1 2 3 4 5
+tt-rgb-plus set-rgb-effect blink normal --colors '#ff0000,#00ff00,#0000ff' --led-count 20 --all-controllers --ports 1
+```
+
 Monitor state without taking over the HID controller:
 
 ```bash
@@ -239,5 +248,10 @@ The HID commands are based on public TT RGB Plus protocol notes by MoshiMoshi0:
 
 - https://moshimoshi0.github.io/ttrgbplusapi/
 - https://github.com/MoshiMoshi0/ttrgbplusapi
+
+Related Linux projects:
+
+- https://github.com/chestm007/linux_thermaltake_riing
+- https://github.com/munablamu/linux_thermaltake_rgb_plus
 
 This project is unofficial and is not affiliated with Thermaltake.

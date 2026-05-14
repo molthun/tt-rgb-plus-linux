@@ -46,8 +46,13 @@ RGB_SPEEDS = {
     "slow": 0x03,
 }
 RGB_EFFECTS = {
-    "flow": 0x00,
-    "spectrum": 0x04,
+    "flow": {"base": 0x00, "uses_speed": True, "colors": "none"},
+    "spectrum": {"base": 0x04, "uses_speed": True, "colors": "none"},
+    "ripple": {"base": 0x08, "uses_speed": True, "colors": "single"},
+    "blink": {"base": 0x0C, "uses_speed": True, "colors": "leds"},
+    "pulse": {"base": 0x10, "uses_speed": True, "colors": "leds"},
+    "wave": {"base": 0x14, "uses_speed": True, "colors": "leds"},
+    "per-led": {"base": 0x18, "uses_speed": False, "colors": "leds"},
 }
 
 
@@ -146,9 +151,26 @@ class TTController:
         payload_color = [colors[channel] for channel in self.info.family.color_order]
         return self.command([0x32, 0x52, port, self.info.family.rgb_full_mode, *payload_color])
 
-    def set_rgb_effect(self, port: int, effect: str, speed: str) -> list[int]:
-        mode = RGB_EFFECTS[effect] + RGB_SPEEDS[speed]
-        return self.command([0x32, 0x52, port, mode])
+    def color_payload(self, red: int, green: int, blue: int) -> list[int]:
+        colors = {"r": red, "g": green, "b": blue}
+        return [colors[channel] for channel in self.info.family.color_order]
+
+    def set_rgb_effect(
+        self,
+        port: int,
+        effect: str,
+        speed: str,
+        colors: list[tuple[int, int, int]] | None = None,
+    ) -> list[int]:
+        effect_info = RGB_EFFECTS[effect]
+        mode = int(effect_info["base"])
+        if effect_info["uses_speed"]:
+            mode += RGB_SPEEDS[speed]
+
+        payload = [0x32, 0x52, port, mode]
+        for red, green, blue in colors or []:
+            payload.extend(self.color_payload(red, green, blue))
+        return self.command(payload)
 
     def save(self) -> list[int]:
         if not self.info.family.can_save:
@@ -306,6 +328,10 @@ def parse_color(value: str) -> tuple[int, int, int]:
     return red, green, blue
 
 
+def parse_color_list(value: str) -> list[tuple[int, int, int]]:
+    return [parse_color(item.strip()) for item in value.split(",") if item.strip()]
+
+
 def cmd_set_rgb(args: argparse.Namespace) -> None:
     try:
         red, green, blue = parse_color(args.color)
@@ -326,13 +352,33 @@ def cmd_set_rgb(args: argparse.Namespace) -> None:
                 print_reply(ctrl.save())
 
 
+def effect_colors(args: argparse.Namespace) -> list[tuple[int, int, int]]:
+    color_mode = RGB_EFFECTS[args.effect]["colors"]
+    if color_mode == "none":
+        return []
+    if args.colors:
+        colors = parse_color_list(args.colors)
+        if color_mode == "single":
+            return colors[:1]
+        if len(colors) == 1:
+            return colors * args.led_count
+        if len(colors) != args.led_count:
+            raise SystemExit(f"--colors must contain either 1 color or exactly {args.led_count} colors")
+        return colors
+    color = parse_color(args.color)
+    if color_mode == "single":
+        return [color]
+    return [color] * args.led_count
+
+
 def cmd_set_rgb_effect(args: argparse.Namespace) -> None:
+    colors = effect_colors(args)
     for controller_index, info in enumerate(select_controllers(args.controller, args.all_controllers)):
         with TTController(info) as ctrl:
             ctrl.init()
             for port in args.ports:
                 print(f"setting controller {controller_index} port {port} rgb_effect={args.effect} speed={args.speed}")
-                print_reply(ctrl.set_rgb_effect(port, args.effect, args.speed))
+                print_reply(ctrl.set_rgb_effect(port, args.effect, args.speed, colors))
             if args.save:
                 print(f"saving profile on controller {controller_index}")
                 print_reply(ctrl.save())
@@ -864,6 +910,13 @@ def build_parser() -> argparse.ArgumentParser:
     effect_parser = sub.add_parser("set-rgb-effect", help="Set built-in RGB effect")
     effect_parser.add_argument("effect", choices=sorted(RGB_EFFECTS), help="RGB effect")
     effect_parser.add_argument("speed", choices=sorted(RGB_SPEEDS), help="Effect speed")
+    effect_parser.add_argument("--color", default="white", help="Color for effects that need colors")
+    effect_parser.add_argument(
+        "--colors",
+        default=None,
+        help="Comma-separated colors for per-LED effects, for example '#ff0000,#00ff00,#0000ff'",
+    )
+    effect_parser.add_argument("--led-count", type=int, default=20, help="LED count for per-LED effects")
     effect_parser.add_argument("-c", "--controller", type=int, default=0, help="Controller index from list")
     effect_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
     effect_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])

@@ -116,7 +116,7 @@ RGB control:
 - Newer controllers, including LEDFanBox, use full mode `0x19` and GRB byte
   order by default.
 - Commands: `set-rgb COLOR` and `rgb-off`.
-- Built-in RGB effects: `set-rgb-effect flow|spectrum slow|normal|fast|extreme`.
+- Built-in RGB effects: `set-rgb-effect flow|spectrum|ripple|blink|pulse|wave|per-led slow|normal|fast|extreme`.
 - `auto-temp --rgb-sync --rgb-style color|flow|spectrum` syncs lighting with
   calculated fan speed. `color` changes static color from blue/cyan to red;
   `flow` and `spectrum` increase circular effect speed with fan speed.

@@ -608,6 +608,30 @@ def color_from_speed(speed: int) -> tuple[int, int, int]:
     return points[-1][1]
 
 
+def color_from_temperature(temp: float) -> tuple[int, int, int]:
+    points = [
+        (30, (0, 255, 0)),
+        (40, (100, 255, 0)),
+        (50, (220, 255, 0)),
+        (60, (255, 180, 0)),
+        (70, (255, 80, 0)),
+        (80, (255, 0, 0)),
+    ]
+    if temp <= points[0][0]:
+        return points[0][1]
+    for idx in range(1, len(points)):
+        left_temp, left_color = points[idx - 1]
+        right_temp, right_color = points[idx]
+        if temp <= right_temp:
+            pos = (temp - left_temp) / (right_temp - left_temp)
+            return interpolate_color(left_color, right_color, pos)
+    return points[-1][1]
+
+
+def color_from_load(load: float) -> tuple[int, int, int]:
+    return color_from_speed(round(load))
+
+
 def rgb_effect_speed_from_fan_speed(speed: int) -> str:
     if speed < 30:
         return "slow"
@@ -618,9 +642,23 @@ def rgb_effect_speed_from_fan_speed(speed: int) -> str:
     return "extreme"
 
 
-def apply_synced_rgb(ctrl: TTController, ports: list[int], fan_speed: int, style: str, led_count: int = 60) -> None:
+def apply_synced_rgb(
+    ctrl: TTController,
+    ports: list[int],
+    fan_speed: int,
+    style: str,
+    led_count: int = 60,
+    color_value: float | None = None,
+    color_source: str = "speed",
+) -> None:
     if style == "color":
-        red, green, blue = color_from_speed(fan_speed)
+        value = fan_speed if color_value is None else color_value
+        if color_source == "temp":
+            red, green, blue = color_from_temperature(value)
+        elif color_source == "load":
+            red, green, blue = color_from_load(value)
+        else:
+            red, green, blue = color_from_speed(fan_speed)
         for port in ports:
             ctrl.set_rgb(port, red, green, blue, led_count)
         return
@@ -889,6 +927,7 @@ def build_auto_control_args(args: argparse.Namespace) -> list[str]:
         command.extend(["--rgb-step", str(args.rgb_step)])
         command.extend(["--rgb-led-count", str(args.rgb_led_count)])
         command.extend(["--rgb-refresh", str(args.rgb_refresh)])
+        command.extend(["--rgb-source", args.rgb_source])
     return command
 
 
@@ -1186,7 +1225,16 @@ def cmd_auto(args: argparse.Namespace) -> None:
             )
             if should_write_rgb:
                 for ctrl in with_counters:
-                    apply_synced_rgb(ctrl, args.ports, target_speed, args.rgb_style, args.rgb_led_count)
+                    value = active_load if args.rgb_source == "load" else target_speed
+                    apply_synced_rgb(
+                        ctrl,
+                        args.ports,
+                        target_speed,
+                        args.rgb_style,
+                        args.rgb_led_count,
+                        value,
+                        args.rgb_source,
+                    )
                 last_rgb_speed = target_speed
                 last_rgb_write = now
 
@@ -1271,7 +1319,16 @@ def cmd_auto_temp(args: argparse.Namespace) -> None:
             )
             if should_write_rgb:
                 for ctrl in controllers:
-                    apply_synced_rgb(ctrl, args.ports, target_speed, args.rgb_style, args.rgb_led_count)
+                    value = temp if args.rgb_source == "temp" else target_speed
+                    apply_synced_rgb(
+                        ctrl,
+                        args.ports,
+                        target_speed,
+                        args.rgb_style,
+                        args.rgb_led_count,
+                        value,
+                        args.rgb_source,
+                    )
                 last_rgb_speed = target_speed
                 last_rgb_write = now
 
@@ -1311,6 +1368,7 @@ def cmd_auto_control(args: argparse.Namespace) -> None:
         "rgb_step": args.rgb_step,
         "rgb_led_count": args.rgb_led_count,
         "rgb_refresh": args.rgb_refresh,
+        "rgb_source": args.rgb_source,
         "state_file": args.state_file,
     }
     if args.mode == "temp":
@@ -1453,6 +1511,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_parser.add_argument("--rgb-step", type=int, default=5, help="Only update RGB when speed changes by N percent")
     config_parser.add_argument("--rgb-led-count", type=int, default=60, help="LED payload count for RGB color sync")
     config_parser.add_argument("--rgb-refresh", type=float, default=2.0, help="Refresh RGB color sync every N seconds")
+    config_parser.add_argument("--rgb-source", choices=["speed", "temp", "load"], default="speed", help="Value used for RGB color sync")
     config_parser.set_defaults(func=cmd_config)
 
     status_parser = sub.add_parser("status", help="Read speed/RPM from ports")
@@ -1576,6 +1635,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_parser.add_argument("--rgb-step", type=int, default=5, help="Only update RGB when speed changes by N percent")
     auto_parser.add_argument("--rgb-led-count", type=int, default=60, help="LED payload count for RGB color sync")
     auto_parser.add_argument("--rgb-refresh", type=float, default=2.0, help="Refresh RGB color sync every N seconds")
+    auto_parser.add_argument("--rgb-source", choices=["speed", "temp", "load"], default="speed", help="Value used for RGB color sync")
     auto_parser.add_argument("--state-file", default=DEFAULT_STATE_FILE, help="Write current auto-control state here")
     auto_parser.set_defaults(func=cmd_auto)
 
@@ -1624,6 +1684,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_temp_parser.add_argument("--rgb-step", type=int, default=5, help="Only update RGB when speed changes by N percent")
     auto_temp_parser.add_argument("--rgb-led-count", type=int, default=60, help="LED payload count for RGB color sync")
     auto_temp_parser.add_argument("--rgb-refresh", type=float, default=2.0, help="Refresh RGB color sync every N seconds")
+    auto_temp_parser.add_argument("--rgb-source", choices=["speed", "temp", "load"], default="speed", help="Value used for RGB color sync")
     auto_temp_parser.add_argument("--state-file", default=DEFAULT_STATE_FILE, help="Write current auto-control state here")
     auto_temp_parser.set_defaults(func=cmd_auto_temp)
 
@@ -1688,6 +1749,7 @@ def build_parser() -> argparse.ArgumentParser:
     auto_control_parser.add_argument("--rgb-step", type=int, default=5, help="Only update RGB when speed changes by N percent")
     auto_control_parser.add_argument("--rgb-led-count", type=int, default=60, help="LED payload count for RGB color sync")
     auto_control_parser.add_argument("--rgb-refresh", type=float, default=2.0, help="Refresh RGB color sync every N seconds")
+    auto_control_parser.add_argument("--rgb-source", choices=["speed", "temp", "load"], default="speed", help="Value used for RGB color sync")
     auto_control_parser.add_argument("--state-file", default=DEFAULT_STATE_FILE, help="Write current auto-control state here")
     auto_control_parser.set_defaults(func=cmd_auto_control)
 

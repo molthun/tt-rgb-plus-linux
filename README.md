@@ -208,6 +208,12 @@ tt-rgb-plus auto-control \
 high speed. `flow` and `spectrum` use built-in circular effects and increase
 effect speed as fan speed rises.
 
+For `--rgb-style color`, choose what drives the color:
+
+- `--rgb-source speed`: calculated fan speed
+- `--rgb-source temp`: selected temperature
+- `--rgb-source load`: CPU/GPU load
+
 Default color-by-speed mapping:
 
 - low speed: green
@@ -241,6 +247,7 @@ sudo tt-rgb-plus config \
   --use-topology \
   --temp-curve 30:18,40:24,50:38,60:58,70:80,80:100 \
   --rgb-style color \
+  --rgb-source temp \
   --restart
 ```
 

@@ -279,6 +279,21 @@ tt-rgb-plus sensors
 sudo usbhid-dump
 ```
 
+## RGB Protocol Discovery
+
+Some controllers expose more lighting modes than the currently named commands.
+For careful testing on one port:
+
+```bash
+sudo systemctl stop tt-rgb-plus-auto.service
+tt-rgb-plus set-rgb-raw --mode 0x19 --color red --repeat 20 --ports 1 -c 0
+tt-rgb-plus scan-rgb-modes --start 0x00 --end 0x2f --color red --repeat 20 --delay 3 --ports 1 -c 0
+sudo systemctl start tt-rgb-plus-auto.service
+```
+
+Note which raw modes produce useful effects and open an issue with the mode
+number, controller PID, fan model, and visible behavior.
+
 ## Protocol Notes
 
 The HID commands are based on public TT RGB Plus protocol notes by MoshiMoshi0:

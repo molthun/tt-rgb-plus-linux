@@ -336,6 +336,10 @@ def parse_color_list(value: str) -> list[tuple[int, int, int]]:
     return [parse_color(item.strip()) for item in value.split(",") if item.strip()]
 
 
+def parse_int(value: str) -> int:
+    return int(value, 0)
+
+
 def parse_port_fans(value: str) -> dict[int, int]:
     mapping = {}
     for item in value.split(","):
@@ -371,6 +375,43 @@ def cmd_set_rgb(args: argparse.Namespace) -> None:
             if args.save:
                 print(f"saving profile on controller {controller_index}")
                 print_reply(ctrl.save())
+
+
+def cmd_set_rgb_raw(args: argparse.Namespace) -> None:
+    red, green, blue = parse_color(args.color)
+    repeat = max(0, args.repeat)
+    for controller_index, info in enumerate(select_controllers(args.controller, args.all_controllers)):
+        with TTController(info) as ctrl:
+            ctrl.init()
+            color = ctrl.color_payload(red, green, blue)
+            payload_colors = color * repeat
+            for port in args.ports:
+                payload = [0x32, 0x52, port, args.mode, *payload_colors]
+                print(
+                    f"controller {controller_index} port {port}: "
+                    f"mode=0x{args.mode:02x} repeat={repeat} color=#{red:02x}{green:02x}{blue:02x}"
+                )
+                print_reply(ctrl.command(payload))
+
+
+def cmd_scan_rgb_modes(args: argparse.Namespace) -> None:
+    red, green, blue = parse_color(args.color)
+    modes = range(args.start, args.end + 1)
+    for mode in modes:
+        for controller_index, info in enumerate(select_controllers(args.controller, args.all_controllers)):
+            with TTController(info) as ctrl:
+                ctrl.init()
+                color = ctrl.color_payload(red, green, blue)
+                payload_colors = color * max(0, args.repeat)
+                for port in args.ports:
+                    payload = [0x32, 0x52, port, mode, *payload_colors]
+                    print(
+                        f"controller {controller_index} port {port}: "
+                        f"mode=0x{mode:02x} repeat={args.repeat}"
+                    )
+                    print_reply(ctrl.command(payload))
+        print(f"observe mode 0x{mode:02x}; sleeping {args.delay}s")
+        time.sleep(args.delay)
 
 
 def led_count_for_port(args: argparse.Namespace, port: int) -> int:
@@ -1074,6 +1115,26 @@ def build_parser() -> argparse.ArgumentParser:
     off_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
     off_parser.add_argument("--save", action="store_true", help="Save to controller profile when supported")
     off_parser.set_defaults(func=lambda args: cmd_set_rgb(argparse.Namespace(**vars(args), color="off")))
+
+    raw_rgb_parser = sub.add_parser("set-rgb-raw", help="Send raw RGB mode for protocol discovery")
+    raw_rgb_parser.add_argument("--mode", type=parse_int, required=True, help="Raw RGB mode byte, e.g. 0x19")
+    raw_rgb_parser.add_argument("--color", default="red", help="Color as #RRGGBB, RRGGBB, or name")
+    raw_rgb_parser.add_argument("--repeat", type=int, default=1, help="Repeat color payload this many times")
+    raw_rgb_parser.add_argument("-c", "--controller", type=int, default=0, help="Controller index from list")
+    raw_rgb_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
+    raw_rgb_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5])
+    raw_rgb_parser.set_defaults(func=cmd_set_rgb_raw)
+
+    scan_rgb_parser = sub.add_parser("scan-rgb-modes", help="Scan raw RGB mode bytes for protocol discovery")
+    scan_rgb_parser.add_argument("--start", type=parse_int, default=0x00, help="Start mode byte")
+    scan_rgb_parser.add_argument("--end", type=parse_int, default=0x2F, help="End mode byte")
+    scan_rgb_parser.add_argument("--color", default="red", help="Color as #RRGGBB, RRGGBB, or name")
+    scan_rgb_parser.add_argument("--repeat", type=int, default=1, help="Repeat color payload this many times")
+    scan_rgb_parser.add_argument("--delay", type=float, default=3.0, help="Seconds to observe each mode")
+    scan_rgb_parser.add_argument("-c", "--controller", type=int, default=0, help="Controller index from list")
+    scan_rgb_parser.add_argument("--all-controllers", action="store_true", help="Apply to every supported controller")
+    scan_rgb_parser.add_argument("-p", "--ports", nargs="+", type=int, default=[1], help="Ports to scan")
+    scan_rgb_parser.set_defaults(func=cmd_scan_rgb_modes)
 
     effect_parser = sub.add_parser("set-rgb-effect", help="Set built-in RGB effect")
     effect_parser.add_argument("effect", choices=sorted(RGB_EFFECTS), help="RGB effect")

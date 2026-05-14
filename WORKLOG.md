@@ -96,6 +96,8 @@ Files:
 - `set-speed`
 - `set-rgb`
 - `rgb-off`
+- `set-rgb-raw`
+- `scan-rgb-modes`
 - `set-rgb-effect`
 - `auto`
 - `auto-temp`

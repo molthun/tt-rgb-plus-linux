@@ -932,8 +932,10 @@ def cmd_topology(args: argparse.Namespace) -> None:
         if not controllers:
             raise SystemExit("No supported Thermaltake controllers found")
 
-        print("This wizard will turn RGB off, then light one controller/port at a time.")
+        print("This wizard will turn RGB off on all checked ports first.")
+        print("Then it will light one controller/port red at a time.")
         print("Enter the number of fans that lit up. Enter 0 for empty ports.")
+        print("Found ports are left running in the selected normal RGB mode.")
         print("Press Ctrl+C to stop without saving.")
         input("Press Enter to start...")
 
@@ -943,14 +945,18 @@ def cmd_topology(args: argparse.Namespace) -> None:
         }
 
         try:
+            for info in controllers:
+                with TTController(info) as ctrl:
+                    ctrl.init()
+                    for port in args.ports:
+                        ctrl.set_rgb(port, 0, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
+
             for idx, info in enumerate(controllers):
                 print(f"\nController {idx}: {info.family.name} {info.vendor_id:04x}:{info.product_id:04x}")
                 ports: dict[str, int] = {}
                 with TTController(info) as ctrl:
                     ctrl.init()
                     for port in args.ports:
-                        for off_port in args.ports:
-                            ctrl.set_rgb(off_port, 0, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
                         ctrl.set_rgb(port, 255, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
                         while True:
                             answer = input(f"Controller {idx}, port {port}: how many fans are red? [0-{args.max_fans}] ").strip()
@@ -964,8 +970,9 @@ def cmd_topology(args: argparse.Namespace) -> None:
                             print(f"Please enter a value from 0 to {args.max_fans}.")
                         if fans > 0:
                             ports[str(port)] = fans
-                    for off_port in args.ports:
-                        ctrl.set_rgb(off_port, 0, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
+                            ctrl.set_rgb_effect(port, args.found_effect, args.found_speed)
+                        else:
+                            ctrl.set_rgb(port, 0, 0, 0, args.max_fans * LEDS_PER_SWAFAN_EX_FAN)
 
                 data["controllers"].append(
                     {
@@ -1271,6 +1278,8 @@ def build_parser() -> argparse.ArgumentParser:
     topology_wizard.add_argument("--path", default=DEFAULT_TOPOLOGY_FILE, help="Topology file path")
     topology_wizard.add_argument("-p", "--ports", nargs="+", type=int, default=[1, 2, 3, 4, 5], help="Ports to check")
     topology_wizard.add_argument("--max-fans", type=int, default=3, help="Maximum fans expected on one port")
+    topology_wizard.add_argument("--found-effect", choices=sorted(RGB_EFFECTS), default="spectrum", help="RGB effect for already detected ports")
+    topology_wizard.add_argument("--found-speed", choices=sorted(RGB_SPEEDS), default="slow", help="RGB effect speed for already detected ports")
     topology_wizard.add_argument("--dry-run", action="store_true", help="Print topology without writing")
     topology_wizard.set_defaults(func=cmd_topology)
     topology_set = topology_sub.add_parser("set", help="Save fan counts per controller")

@@ -133,8 +133,10 @@ sudo tt-rgb-plus topology set '1:3,2:3' '1:3,2:1'
 tt-rgb-plus topology show
 ```
 
-`topology wizard` turns all RGB off, lights one controller/port red at a time,
-asks how many fans lit up, and saves `/etc/tt-rgb-plus/topology.json`.
+`topology wizard` turns all checked ports off once, lights one controller/port
+red at a time, asks how many fans lit up, then leaves found ports running in a
+normal RGB effect while continuing. Empty ports stay off. At the end it saves
+`/etc/tt-rgb-plus/topology.json`.
 
 The example means:
 
